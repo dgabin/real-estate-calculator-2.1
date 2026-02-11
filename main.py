@@ -1,22 +1,20 @@
-# main.py
 import streamlit as st
 import pandas as pd
-import plotly.express as px  # For the interactive graph
+import plotly.express as px
 from logic import calculate_payment_plan
 
-# --- Page Configuration ---
+# --- Configuración de la Página ---
 st.set_page_config(
-    page_title="Real Estate Payment Calculator",
+    page_title="Calculadora Inmobiliaria",
     page_icon="🏢",
     layout="wide"
 )
 
-# --- Sidebar: User Inputs ---
-st.sidebar.header("Property Details")
+# --- Barra Lateral: Entradas (Inputs) ---
+st.sidebar.header("Detalles de la Propiedad")
 
-# Using 'number_input' for precise amounts
 price = st.sidebar.number_input(
-    "Property Price ($)", 
+    "Precio de la Propiedad ($)", 
     min_value=0.0, 
     value=150000.0, 
     step=1000.0,
@@ -24,46 +22,47 @@ price = st.sidebar.number_input(
 )
 
 separation = st.sidebar.number_input(
-    "Separation Fee ($)", 
+    "Separación / Reserva ($)", 
     min_value=0.0, 
     value=2000.0, 
     step=100.0
 )
 
 st.sidebar.markdown("---")
-st.sidebar.header("Payment Terms")
+st.sidebar.header("Plan de Pagos")
 
-# Initial % (Contract Signing) - Default 10%
-initial_percent = st.sidebar.slider(
-    "Initial Down Payment (%)", 
+# Changed from Slider to Number Input for precision
+initial_percent = st.sidebar.number_input(
+    "% Inicial a la Firma", 
     min_value=0.0, 
     max_value=100.0, 
     value=10.0,
-    help="0% if only Separation is required to sign."
+    step=0.5,
+    help="Porcentaje que se debe completar al firmar contrato (usualmente 10%). Poner 0 si solo se requiere separación."
 )
 
-# Total Construction % - Default 30%
-total_construction_percent = st.sidebar.slider(
-    "Total Construction Equity (%)", 
-    min_value=initial_percent, 
+total_construction_percent = st.sidebar.number_input(
+    "% Total Durante Construcción", 
+    min_value=0.0, 
     max_value=100.0, 
     value=30.0,
-    help="Total % paid before final delivery (includes initial)."
+    step=0.5,
+    help="Porcentaje total pagado antes de la entrega final (incluye el inicial)."
 )
 
 months = st.sidebar.number_input(
-    "Months to Pay (Construction Duration)", 
+    "Meses para Pagar (Construcción)", 
     min_value=1, 
     value=24, 
     step=1
 )
 
-# --- Main App Logic ---
+# --- Lógica Principal ---
 
-st.title("🏗️ Pre-Construction Payment Calculator")
-st.markdown("Calculate monthly installments for off-plan properties.")
+st.title("🏗️ Calculadora de Pagos: Pre-Construcción")
+st.markdown("Calcule las cuotas mensuales para propiedades en plano.")
 
-# Call the logic function
+# Llamar a la función de lógica
 result = calculate_payment_plan(
     price, 
     separation, 
@@ -72,46 +71,45 @@ result = calculate_payment_plan(
     months
 )
 
-# Error Handling
+# Manejo de Errores
 if "error" in result:
-    st.error(result["error"])
+    st.error(f"⚠️ {result['error']}")
 else:
-    # Extract data for easier reading
     summary = result["summary"]
     
-    # --- Section 1: Key Metrics (The "Cards") ---
+    # --- Sección 1: Métricas Clave (Tarjetas) ---
     col1, col2, col3 = st.columns(3)
     
     with col1:
         st.metric(
-            label="Due at Signing", 
+            label="A Completar en Firma", 
             value=f"${summary['due_at_signing']:,.2f}",
-            delta=f"Initial {result['percentages']['initial_target']}%"
+            delta=f"Meta Inicial: {result['percentages']['initial_target']}%"
         )
         
     with col2:
         st.metric(
-            label="Monthly Payment", 
+            label="Cuota Mensual", 
             value=f"${summary['monthly_payment']:,.2f}",
-            delta=f"{months} Months"
+            delta=f"{months} Meses"
         )
         
     with col3:
         st.metric(
-            label="Final Payment (Contra Entrega)", 
+            label="Contra Entrega (Final)", 
             value=f"${summary['final_payment']:,.2f}",
-            delta="Due on Delivery"
+            delta="Al recibir la llave"
         )
 
     st.markdown("---")
 
-    # --- Section 2: The Visual Graph ---
-    st.subheader("💰 Payment Breakdown")
+    # --- Sección 2: Gráfico Visual ---
+    st.subheader("💰 Desglose de Pagos")
 
-    # Prepare data for the chart
+    # Datos para el gráfico
     chart_data = pd.DataFrame({
-        "Stage": ["Separation", "Contract Signing", "During Construction (Total)", "Final Payment"],
-        "Amount": [
+        "Etapa": ["Separación", "Completivo Firma", "Cuotas Mensuales (Total)", "Contra Entrega"],
+        "Monto": [
             summary['separation_paid'],
             summary['due_at_signing'],
             summary['total_during_construction'],
@@ -119,29 +117,28 @@ else:
         ]
     })
 
-    # Create a nice bar chart using Plotly
     fig = px.bar(
         chart_data, 
-        x="Stage", 
-        y="Amount", 
+        x="Etapa", 
+        y="Monto", 
         text_auto='.2s',
-        title="Payment Structure Visualization",
-        color="Stage",
+        title="Estructura de Pagos",
+        color="Etapa",
         color_discrete_sequence=px.colors.qualitative.Pastel
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # --- Section 3: Detailed Summary Table ---
-    with st.expander("See Detailed Breakdown"):
+    # --- Sección 3: Tabla Detallada ---
+    with st.expander("Ver Tabla Detallada"):
         st.table(pd.DataFrame({
-            "Description": [
-                "Total Property Price",
-                "Separation Fee (Paid Now)",
-                "Due at Signing (Initial % - Sep)",
-                "Monthly Installments (Total)",
-                "Final Payment (Financing/Cash)"
+            "Concepto": [
+                "Precio Total Propiedad",
+                "Separación (Pagado Ya)",
+                "Completivo a la Firma",
+                "Total en Cuotas Mensuales",
+                "Pago Final (Financiamiento/Cash)"
             ],
-            "Amount": [
+            "Monto": [
                 f"${summary['property_price']:,.2f}",
                 f"${summary['separation_paid']:,.2f}",
                 f"${summary['due_at_signing']:,.2f}",
