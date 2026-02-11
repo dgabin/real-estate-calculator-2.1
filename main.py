@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from logic import calculate_payment_plan
+from pdf_generator import generar_pdf
 
 # --- Configuración de la Página ---
 st.set_page_config(
