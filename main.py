@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from logic import calculate_payment_plan
-from pdf_generator import generar_pdf
+from pdf_generator import generar_pdf  # <--- IMPORTANTE: Importar el generador
 
 # --- Configuración de la Página ---
 st.set_page_config(
@@ -32,7 +32,6 @@ separation = st.sidebar.number_input(
 st.sidebar.markdown("---")
 st.sidebar.header("Plan de Pagos")
 
-# Changed from Slider to Number Input for precision
 initial_percent = st.sidebar.number_input(
     "% Inicial a la Firma", 
     min_value=0.0, 
@@ -107,7 +106,6 @@ else:
     # --- Sección 2: Gráfico Visual ---
     st.subheader("💰 Desglose de Pagos")
 
-    # Datos para el gráfico
     chart_data = pd.DataFrame({
         "Etapa": ["Separación", "Completivo Firma", "Cuotas Mensuales (Total)", "Contra Entrega"],
         "Monto": [
@@ -147,3 +145,17 @@ else:
                 f"${summary['final_payment']:,.2f}"
             ]
         }))
+
+    # --- Sección 4: Botón de PDF ---
+    st.markdown("---")
+    st.subheader("📄 Exportar")
+
+    pdf_file = generar_pdf(summary, result['percentages'])
+
+    st.download_button(
+        label="📥 Descargar Plan de Pagos (PDF)",
+        data=pdf_file,
+        file_name="plan_de_pagos.pdf",
+        mime="application/pdf",
+        type="primary"
+    )
