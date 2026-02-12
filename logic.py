@@ -56,7 +56,6 @@ def calculate_mortgage(
 ) -> Dict[str, float]:
     """
     Calcula la cuota nivelada del préstamo (Capital + Interés + Seguro).
-    insurance_percent_annual: % anual sobre el monto del préstamo (ej. 0.8% - 1.2% es común).
     """
     if loan_amount <= 0:
         return {"monthly_total": 0, "monthly_principal_interest": 0, "monthly_insurance": 0}
