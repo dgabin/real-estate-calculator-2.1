@@ -1,161 +1,78 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from logic import calculate_payment_plan
-from pdf_generator import generar_pdf  # <--- IMPORTANTE: Importar el generador
+from logic import calculate_payment_plan, calculate_mortgage
+from pdf_generator import generar_pdf
 
-# --- Configuración de la Página ---
-st.set_page_config(
-    page_title="Calculadora Inmobiliaria",
-    page_icon="🏢",
-    layout="wide"
-)
+st.set_page_config(page_title="Calculadora Inmobiliaria", page_icon="🏢", layout="wide")
 
-# --- Barra Lateral: Entradas (Inputs) ---
-st.sidebar.header("Detalles de la Propiedad")
+# --- Sidebar ---
+st.sidebar.header("1. Fase de Construcción")
+price = st.sidebar.number_input("Precio Propiedad ($)", min_value=0.0, value=150000.0, step=1000.0, format="%.2f")
+separation = st.sidebar.number_input("Separación ($)", min_value=0.0, value=2000.0, step=100.0)
 
-price = st.sidebar.number_input(
-    "Precio de la Propiedad ($)", 
-    min_value=0.0, 
-    value=150000.0, 
-    step=1000.0,
-    format="%.2f"
-)
-
-separation = st.sidebar.number_input(
-    "Separación / Reserva ($)", 
-    min_value=0.0, 
-    value=2000.0, 
-    step=100.0
-)
+initial_percent = st.sidebar.number_input("% Firma Contrato", min_value=0.0, max_value=100.0, value=10.0, step=0.5)
+total_construction_percent = st.sidebar.number_input("% Total Durante Construcción", min_value=0.0, max_value=100.0, value=30.0, step=0.5)
+months = st.sidebar.number_input("Meses Construcción", min_value=1, value=24, step=1)
 
 st.sidebar.markdown("---")
-st.sidebar.header("Plan de Pagos")
+st.sidebar.header("2. Fase de Financiamiento")
+interest_rate = st.sidebar.number_input("Tasa de Interés Anual (%)", min_value=0.0, value=11.5, step=0.25, help="Tasa promedio actual en bancos.")
+loan_years = st.sidebar.number_input("Plazo del Préstamo (Años)", min_value=1, value=20, step=1)
+insurance_rate = st.sidebar.number_input("Seguro Anual Estimado (%)", min_value=0.0, value=0.9, step=0.1, help="Seguro de vida e incendio (aprox 0.8% - 1.2% del préstamo).")
 
-initial_percent = st.sidebar.number_input(
-    "% Inicial a la Firma", 
-    min_value=0.0, 
-    max_value=100.0, 
-    value=10.0,
-    step=0.5,
-    help="Porcentaje que se debe completar al firmar contrato (usualmente 10%). Poner 0 si solo se requiere separación."
-)
+# --- Lógica ---
+result = calculate_payment_plan(price, separation, initial_percent, total_construction_percent, months)
 
-total_construction_percent = st.sidebar.number_input(
-    "% Total Durante Construcción", 
-    min_value=0.0, 
-    max_value=100.0, 
-    value=30.0,
-    step=0.5,
-    help="Porcentaje total pagado antes de la entrega final (incluye el inicial)."
-)
-
-months = st.sidebar.number_input(
-    "Meses para Pagar (Construcción)", 
-    min_value=1, 
-    value=24, 
-    step=1
-)
-
-# --- Lógica Principal ---
-
-st.title("🏗️ Calculadora de Pagos: Pre-Construcción")
-st.markdown("Calcule las cuotas mensuales para propiedades en plano.")
-
-# Llamar a la función de lógica
-result = calculate_payment_plan(
-    price, 
-    separation, 
-    initial_percent, 
-    total_construction_percent, 
-    months
-)
-
-# Manejo de Errores
 if "error" in result:
-    st.error(f"⚠️ {result['error']}")
+    st.error(result["error"])
 else:
     summary = result["summary"]
-    
-    # --- Sección 1: Métricas Clave (Tarjetas) ---
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric(
-            label="A Completar en Firma", 
-            value=f"${summary['due_at_signing']:,.2f}",
-            delta=f"Meta Inicial: {result['percentages']['initial_target']}%"
-        )
-        
-    with col2:
-        st.metric(
-            label="Cuota Mensual", 
-            value=f"${summary['monthly_payment']:,.2f}",
-            delta=f"{months} Meses"
-        )
-        
-    with col3:
-        st.metric(
-            label="Contra Entrega (Final)", 
-            value=f"${summary['final_payment']:,.2f}",
-            delta="Al recibir la llave"
-        )
+    # Calcular Hipoteca basada en el monto final
+    mortgage = calculate_mortgage(summary['final_payment'], interest_rate, loan_years, insurance_rate)
 
+    st.title("🏢 Calculadora Inmobiliaria Integral")
+    
+    # --- FASE 1: Construcción ---
+    st.header("Fase 1: Durante la Construcción")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("A Completar en Firma", f"${summary['due_at_signing']:,.2f}")
+    c2.metric("Cuota Mensual (Construcción)", f"${summary['monthly_payment']:,.2f}", f"{months} Meses")
+    c3.metric("Monto a Financiar", f"${summary['final_payment']:,.2f}", "Contra Entrega")
+
+    # --- FASE 2: Financiamiento ---
     st.markdown("---")
+    st.header("Fase 2: Financiamiento Bancario")
+    
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Cuota Banco (Capital+Interés)", f"${mortgage['monthly_principal_interest']:,.2f}")
+    m2.metric("Seguros Estimados", f"${mortgage['monthly_insurance']:,.2f}", f"{insurance_rate}% Anual")
+    m3.metric("CUOTA TOTAL MENSUAL", f"${mortgage['monthly_total']:,.2f}", "Aprox. Banco")
 
-    # --- Sección 2: Gráfico Visual ---
-    st.subheader("💰 Desglose de Pagos")
-
+    # --- Gráfico ---
+    st.markdown("---")
+    st.subheader("Flujo de Caja del Cliente")
     chart_data = pd.DataFrame({
-        "Etapa": ["Separación", "Completivo Firma", "Cuotas Mensuales (Total)", "Contra Entrega"],
-        "Monto": [
-            summary['separation_paid'],
-            summary['due_at_signing'],
-            summary['total_during_construction'],
-            summary['final_payment']
+        "Etapa": ["Firma Contrato", "Cuota Construcción", "Cuota Banco (Futura)"],
+        "Monto Mensual": [
+            summary['due_at_signing'], # Un solo pago, pero sirve de referencia visual
+            summary['monthly_payment'],
+            mortgage['monthly_total']
         ]
     })
-
-    fig = px.bar(
-        chart_data, 
-        x="Etapa", 
-        y="Monto", 
-        text_auto='.2s',
-        title="Estructura de Pagos",
-        color="Etapa",
-        color_discrete_sequence=px.colors.qualitative.Pastel
-    )
+    
+    fig = px.bar(chart_data, x="Etapa", y="Monto Mensual", title="Comparativa de Pagos", text_auto="$.2s", color="Etapa")
     st.plotly_chart(fig, use_container_width=True)
 
-    # --- Sección 3: Tabla Detallada ---
-    with st.expander("Ver Tabla Detallada"):
-        st.table(pd.DataFrame({
-            "Concepto": [
-                "Precio Total Propiedad",
-                "Separación (Pagado Ya)",
-                "Completivo a la Firma",
-                "Total en Cuotas Mensuales",
-                "Pago Final (Financiamiento/Cash)"
-            ],
-            "Monto": [
-                f"${summary['property_price']:,.2f}",
-                f"${summary['separation_paid']:,.2f}",
-                f"${summary['due_at_signing']:,.2f}",
-                f"${summary['total_during_construction']:,.2f}",
-                f"${summary['final_payment']:,.2f}"
-            ]
-        }))
-
-    # --- Sección 4: Botón de PDF ---
+    # --- PDF ---
     st.markdown("---")
-    st.subheader("📄 Exportar")
-
-    pdf_file = generar_pdf(summary, result['percentages'])
+    # Pasamos AMBOS resultados al generador de PDF
+    pdf_file = generar_pdf(summary, result['percentages'], mortgage)
 
     st.download_button(
-        label="📥 Descargar Plan de Pagos (PDF)",
+        label="📥 Descargar Análisis Completo (PDF)",
         data=pdf_file,
-        file_name="plan_de_pagos.pdf",
+        file_name="analisis_inmobiliario.pdf",
         mime="application/pdf",
         type="primary"
     )
